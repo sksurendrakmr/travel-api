@@ -1,5 +1,5 @@
 const Tour = require('../models/tourModel')
-
+const APIFeatures = require('./../utils/apiFeatures')
 /*
 ?Param Middleware
 exports.checkId = (req, res, next, val) => {
@@ -27,54 +27,14 @@ exports.getTours = async (req, res) => {
     const tours = await Tour.find().where('duration').equals(5).where('difficulty').equals('easy')
     */
 
-    console.log(req.query)
-
-    //!BUILD THE QUERY
-
-    //*FILTERING
-    const queryObj = { ...req.query }
-    const excludedFields = ['page', 'limit', 'sort', 'fields']
-
-    excludedFields.forEach((field) => delete queryObj[field])
-
-    //*ADVANCE FILTERING
-    let queryStr = JSON.stringify(queryObj)
-    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`)
-
-    console.log(JSON.parse(queryStr))
-    let query = Tour.find(JSON.parse(queryStr))
-
-    //*SORTING
-    if (req.query.sort) {
-      const sortBy = req.query.sort.split(',').join(' ')
-      console.log('sortBy', sortBy)
-      query = query.sort(sortBy)
-    } else {
-      query = query.sort('-createdAt')
-    }
-
-    //*FIELD LIMITING
-    if (req.query.fields) {
-      const fields = req.query.fields.split(',').join(' ')
-      console.log(fields)
-      query = query.select(fields)
-    } else {
-      query = query.select('-__v')
-    }
-
-    //*PAGINATION
-    const page = req.query.page * 1 || 1
-    const limit = req.query.limit * 1 || 100
-    const skip = (page - 1) * limit
-    query = query.skip(skip).limit(limit)
-
-    if (req.query.page) {
-      const numOfTours = await Tour.countDocuments() //?return no. of documents
-      if (skip > numOfTours) throw new Error("This page doesn't exist")
-    }
-
     //!EXECUTE THE QUERY
-    const tours = await query
+    const features = new APIFeatures(Tour.find(), req.query)
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate()
+
+    const tours = await features.query
     res.status(200).json({
       status: 'success',
       results: tours.length,
@@ -82,8 +42,8 @@ exports.getTours = async (req, res) => {
         tours,
       },
     })
-  } catch (error) {
-    res.status(404).json({ status: 'Fail', message: error })
+  } catch (err) {
+    res.status(404).json({ status: 'Fail', message: err.message })
   }
 }
 
